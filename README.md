@@ -131,10 +131,12 @@ ile çalışır; demo modu yoktur.
 3. `flutter build apk --release` ile APK üretir.
 4. APK'yı **Artifacts → chameleon-cli-apk-<sha>** olarak yükler.
 
-`v*` biçiminde bir tag push edilirse (`v1.0.0` gibi) aynı APK GitHub
-Release'e de eklenir. Release APK'sı şu an debug anahtarıyla imzalanır;
-mağaza dağıtımı için `android/app/build.gradle.kts` içinde kendi
-keystore/signing config'inizi tanımlayın.
+`main` branch'ine yapılan her push, **Latest APK** adlı rolling release'i
+günceller ve APK'yı doğrudan Releases sayfasına koyar. `v*` biçiminde bir tag
+push edilirse (`v1.0.0` gibi) sürümlü bir release de oluşturulur. Release
+APK'sı şu an debug anahtarıyla imzalanır; mağaza dağıtımı için
+`android/app/build.gradle.kts` içinde kendi keystore/signing config'inizi
+tanımlayın.
 
 
 ## Doğrulama
