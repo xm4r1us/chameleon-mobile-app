@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/strings.dart';
 import '../../services/device_session.dart';
+import 'apdu_screen.dart';
 import 'console_screen.dart';
 import 'dictionary_screen.dart';
 import 'key_checker_screen.dart';
@@ -66,6 +67,13 @@ class ToolsScreen extends StatelessWidget {
         title: context.tr('dictionary'),
         subtitle: context.tr('dictionaryDesc'),
         screen: const DictionaryScreen(),
+      ),
+      _Tool(
+        icon: Icons.swap_horiz,
+        title: context.tr('apduLab'),
+        subtitle: context.tr('apduLabDesc'),
+        screen: const ApduScreen(),
+        requiresDevice: true,
       ),
       _Tool(
         icon: Icons.terminal,

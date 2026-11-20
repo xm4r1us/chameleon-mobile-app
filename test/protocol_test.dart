@@ -96,6 +96,12 @@ void main() {
       );
     });
 
+    test('sends an ISO7816-4 APDU through the firmware command', () async {
+      final response = await client.hf14a4ReaderApdu(hexToBytes('00A4040000'));
+      expect(response.sublist(response.length - 2), [0x90, 0x00]);
+      expect(response.sublist(0, 3), [0x6f, 0x09, 0x84]);
+    });
+
     test('finds keys for all sectors', () async {
       final result = await client.checkKeysOfSectors(
         mask: Uint8List(10),

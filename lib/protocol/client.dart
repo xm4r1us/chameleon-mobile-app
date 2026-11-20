@@ -1007,6 +1007,39 @@ class ChameleonClient {
   }
 
   // ---------------------------------------------------------------------------
+  // ISO14443-4 / APDU reader
+  // ---------------------------------------------------------------------------
+
+  /// Sends one ISO7816-4 APDU to a card in the field. The firmware performs
+  /// the 14A select, RATS, CRC and PCB framing; the returned bytes are the
+  /// card's response including SW1/SW2.
+  Future<Uint8List> hf14a4ReaderApdu(Uint8List apdu) async {
+    if (apdu.isEmpty) throw ArgumentError('APDU must not be empty');
+    if (apdu.length > 512) throw ArgumentError('APDU exceeds 512 bytes');
+    final frame = await send(
+      Cmd.hf14a4ReaderApdu,
+      data: apdu,
+      timeout: const Duration(seconds: 6),
+      allowedStatus: {
+        Status.success,
+        Status.hfTagOk,
+        Status.hfTagNo,
+        Status.hfErrStat,
+        Status.hfErrCrc,
+        Status.hfCollision,
+        Status.parErr,
+      },
+    );
+    if (frame.status == Status.hfTagNo) {
+      throw ChameleonException('No ISO14443-4 card in field', status: frame.status);
+    }
+    if (frame.status != Status.success && frame.status != Status.hfTagOk) {
+      throw ChameleonException(Status.describe(frame.status), status: frame.status);
+    }
+    return Uint8List.fromList(frame.data);
+  }
+
+  // ---------------------------------------------------------------------------
   // Device settings
   // ---------------------------------------------------------------------------
 

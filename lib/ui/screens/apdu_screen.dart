@@ -1,0 +1,361 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+
+import '../../l10n/strings.dart';
+import '../../protocol/byte_utils.dart';
+import '../../protocol/tlv.dart';
+import '../../services/device_session.dart';
+import '../../theme.dart';
+import '../widgets.dart';
+
+class ApduScreen extends StatefulWidget {
+  const ApduScreen({super.key});
+
+  @override
+  State<ApduScreen> createState() => _ApduScreenState();
+}
+
+class _ApduScreenState extends State<ApduScreen> {
+  final _apdu = TextEditingController();
+  final List<_ApduExchange> _history = [];
+  Uint8List? _response;
+  bool _busy = false;
+
+  static const _presets = <String, String>{
+    'Select MF': '00 A4 00 00 02 3F 00',
+    'Select by name': '00 A4 04 00 00',
+    'Read binary': '00 B0 00 00 00',
+    'Get challenge': '00 84 00 00 08',
+    'Get data': '80 CA 00 00 00',
+  };
+
+  @override
+  void dispose() {
+    _apdu.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<DeviceSession>();
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final response = _response;
+    final body = response != null && response.length >= 2
+        ? Uint8List.fromList(response.sublist(0, response.length - 2))
+        : response;
+    final sw = response != null && response.length >= 2
+        ? ((response[response.length - 2] << 8) | response[response.length - 1])
+        : null;
+    final tlv = body == null || body.isEmpty ? null : parseTlv(body);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(context.tr('apduLab'))),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        children: [
+          Card(
+            color: scheme.tertiaryContainer.withValues(alpha: 0.4),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline, color: scheme.onTertiaryContainer),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      context.tr('apduScope'),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: scheme.onTertiaryContainer,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (!session.readerMode) ...[
+            const SizedBox(height: 10),
+            _ReaderBanner(
+              onSwitch: session.isBusy
+                  ? null
+                  : () => session.guard(
+                        context.tr('modeReader'),
+                        () => session.setReaderMode(true),
+                      ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _apdu,
+                    minLines: 2,
+                    maxLines: 5,
+                    style: AppTheme.mono,
+                    decoration: InputDecoration(
+                      labelText: context.tr('apduCommand'),
+                      hintText: context.tr('apduHexHint'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    context.tr('apduPresets'),
+                    style: theme.textTheme.labelMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final entry in _presets.entries)
+                        ActionChip(
+                          label: Text(entry.key),
+                          onPressed: () => setState(() => _apdu.text = entry.value),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy || !session.isConnected || !session.readerMode ? null : _send,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send),
+                      label: Text(context.tr('apduSend')),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (response != null) ...[
+            const SizedBox(height: 14),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            context.tr('apduResponse'),
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: context.tr('copy'),
+                          onPressed: () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: bytesToHexUpper(response, separator: ' ')),
+                            );
+                            if (mounted) showSnack(context, context.tr('copied'));
+                          },
+                          icon: const Icon(Icons.copy_rounded, size: 18),
+                        ),
+                      ],
+                    ),
+                    if (sw != null) ...[
+                      const SizedBox(height: 4),
+                      InfoRow(
+                        label: context.tr('apduStatus'),
+                        value:
+                            '${sw.toRadixString(16).padLeft(4, '0').toUpperCase()} · ${swDescription(sw)}',
+                        mono: true,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    HexBlock(bytesToHexUpper(response, separator: ' '), label: context.tr('apduRaw')),
+                    if (body != null && body.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(context.tr('apduTlv'), style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 6),
+                      if (tlv == null || tlv.nodes.isEmpty)
+                        Text(
+                          tlv?.error ?? context.tr('apduNoData'),
+                          style: theme.textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                        )
+                      else
+                        ..._buildNodes(tlv.nodes),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ],
+          if (_history.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            SectionHeader(context.tr('apduHistory')),
+            ..._history.reversed.map(
+              (exchange) => Card(
+                child: ListTile(
+                  title: Text(
+                    bytesToHexUpper(exchange.request, separator: ' '),
+                    style: AppTheme.mono.copyWith(fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    bytesToHexUpper(exchange.response, separator: ' '),
+                    style: AppTheme.mono.copyWith(fontSize: 11),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.replay, size: 18),
+                    onPressed: () => setState(
+                      () => _apdu.text = bytesToHexUpper(exchange.request, separator: ' '),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildNodes(List<TlvNode> nodes, [int level = 0]) {
+    final out = <Widget>[];
+    for (final node in nodes) {
+      final indent = EdgeInsets.only(left: level * 14.0);
+      out.add(
+        Padding(
+          padding: indent,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    StatusPill(
+                      'TAG ${node.tagHex}',
+                      color: node.constructed
+                          ? Theme.of(context).colorScheme.tertiary
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'LEN ${node.value.length}',
+                      style: AppTheme.mono.copyWith(fontSize: 11),
+                    ),
+                  ],
+                ),
+                if (!node.constructed && node.value.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    node.valueHex,
+                    style: AppTheme.mono.copyWith(fontSize: 11.5),
+                  ),
+                  if (_printable(node.value)) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '"${String.fromCharCodes(node.value)}"',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+      if (node.children.isNotEmpty) out.addAll(_buildNodes(node.children, level + 1));
+    }
+    return out;
+  }
+
+  bool _printable(Uint8List value) =>
+      value.isNotEmpty && value.every((b) => b >= 0x20 && b <= 0x7e);
+
+  Future<void> _send() async {
+    final session = context.read<DeviceSession>();
+    Uint8List apdu;
+    try {
+      final clean = _apdu.text.replaceAll(RegExp(r'[^0-9a-fA-F]'), '');
+      if (clean.length < 8 || clean.length.isOdd) {
+        throw const FormatException('APDU too short');
+      }
+      apdu = hexToBytes(clean);
+    } on FormatException {
+      showSnack(context, context.tr('apduInvalid'), error: true);
+      return;
+    }
+
+    setState(() => _busy = true);
+    final response = await session.guard(
+      context.tr('apduSend'),
+      () => session.client!.hf14a4ReaderApdu(apdu),
+    );
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (response != null) {
+        _response = response;
+        _history.add(_ApduExchange(request: apdu, response: response));
+        if (_history.length > 20) _history.removeAt(0);
+      }
+    });
+  }
+}
+
+class _ApduExchange {
+  _ApduExchange({required this.request, required this.response});
+  final Uint8List request;
+  final Uint8List response;
+}
+
+class _ReaderBanner extends StatelessWidget {
+  const _ReaderBanner({this.onSwitch});
+  final VoidCallback? onSwitch;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: scheme.onTertiaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              context.tr('apduReaderHint'),
+              style: TextStyle(color: scheme.onTertiaryContainer),
+            ),
+          ),
+          TextButton(
+            onPressed: onSwitch,
+            child: Text(context.tr('switchMode')),
+          ),
+        ],
+      ),
+    );
+  }
+}

@@ -149,6 +149,13 @@ class Cmd {
   static const int jablotronGetEmuId = 5011;
   static const int idteckSetEmuId = 5012;
   static const int idteckGetEmuId = 5013;
+
+  // ISO14443-4 / APDU
+  static const int hf14a4ApduRecv = 6000;
+  static const int hf14a4ApduSend = 6001;
+  static const int hf14a4SetAntiColl = 6002;
+  static const int hf14a4StaticResponse = 6003;
+  static const int hf14a4ReaderApdu = 6004;
 }
 
 /// Firmware status codes.

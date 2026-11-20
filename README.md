@@ -34,6 +34,9 @@ emülatör kontrolü ve MIFARE Classic anahtar kurtarma içerir.
   uygulama içinden çalıştırılabilir.
 - **Blok araçları** — tek blok okuma/yazma ve value block inc/dec/restore.
 - **Ham konsol** — komut kimliği + hex veri gönderimi, durum ve yanıt inceleme.
+- **APDU konsolu** — JavaCard / ISO14443-4 geliştirmesi için ISO7816-4 APDU gönderimi,
+  SW1/SW2 çözümlemesi ve genel BER-TLV görüntüleyici. Otomatik EMV PAN/expiry
+  ayıklama yapmaz.
 - **Cihaz ayarları** — animasyon, A/B kısa/uzun basış işlevleri, BLE eşleştirme
   anahtarı, eşleşmeleri temizleme, uyku süresi, uzun basış eşiği, reset,
   fabrika sıfırlama ve bootloader'a girme.
@@ -49,6 +52,7 @@ emülatör kontrolü ve MIFARE Classic anahtar kurtarma içerir.
 | `hw factory_reset`, `hw dfu` | Cihaz ayarları (DFU yalnızca bootloader'a girer) |
 | `hf 14a scan/info` | Oku → HF |
 | `hf 14a raw` | Ham konsol (komut 2010) |
+| `hf 14a` APDU / `emv apdu` (reader APDU) | APDU konsolu (ham ISO7816-4) |
 | `hf mf rdbl/wrbl/value` | Araçlar → MIFARE Classic blok araçları |
 | `hf mf fchk` | Araçlar → Anahtar denetleyici |
 | `hf mf nested/darkside` | Araçlar → MIFARE anahtar kurtarma |
@@ -68,8 +72,9 @@ Bu sürüm bilinçli olarak şunları içermez:
   MFKey32v2 vardır; hardnested için masaüstü CLI kullanın.
 - **USB-OTG** taşıması. Telefon tarafı BLE üzerinden çalışır.
 - **DFU firmware güncelleme** akışı (bootloader'a girme komutu vardır).
-- SEOS/EMV/ISO14443-4 APDU araçları, HF/LF sniffing, EM4x05 ve T55xx raw
-  komutları.
+- SEOS ve otomatik EMV PAN/expiry araçları, HF/LF sniffing, EM4x05 ve T55xx raw
+  komutları. APDU konsolu ham ISO7816-4 komutları gönderir; ödeme kartı verisi
+  ayıklamaz.
 - IDTECK okuma (yazma/emülasyon vardır; okuma firmware'de özel LF örnekleme
   gerektirir).
 

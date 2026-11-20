@@ -439,6 +439,11 @@ class FakeTransport implements ChameleonTransport {
       case Cmd.idteckGetEmuId:
         return _ok(List<int>.filled(8, 0x11));
 
+      case Cmd.hf14a4ReaderApdu:
+        return _ok([
+          0x6f, 0x09, 0x84, 0x07, 0xa0, 0x00, 0x00, 0x00, 0x03, 0x10, 0x10, 0x90, 0x00,
+        ]);
+
       case Cmd.getAnimationMode:
         return _ok([_animation]);
       case Cmd.setAnimationMode:
