@@ -52,7 +52,7 @@ emülatör kontrolü ve MIFARE Classic anahtar kurtarma içerir.
 | `hw factory_reset`, `hw dfu` | Cihaz ayarları (DFU yalnızca bootloader'a girer) |
 | `hf 14a scan/info` | Oku → HF |
 | `hf 14a raw` | Ham konsol (komut 2010) |
-| `hf 14a` APDU / `emv apdu` (reader APDU) | APDU konsolu (ham ISO7816-4) |
+| `hf14a_4_reader_apdu` (ISO14443-4 reader APDU) | APDU konsolu (ham ISO7816-4) |
 | `hf mf rdbl/wrbl/value` | Araçlar → MIFARE Classic blok araçları |
 | `hf mf fchk` | Araçlar → Anahtar denetleyici |
 | `hf mf nested/darkside` | Araçlar → MIFARE anahtar kurtarma |
