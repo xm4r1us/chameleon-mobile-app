@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../l10n/strings.dart';
 import '../../protocol/byte_utils.dart';
+import '../../protocol/commands.dart';
 import '../../protocol/tlv.dart';
 import '../../services/device_session.dart';
 import '../../theme.dart';
@@ -22,6 +23,7 @@ class _ApduScreenState extends State<ApduScreen> {
   final _apdu = TextEditingController();
   final List<_ApduExchange> _history = [];
   Uint8List? _response;
+  String? _error;
   bool _busy = false;
 
   static const _presets = <String, String>{
@@ -51,6 +53,8 @@ class _ApduScreenState extends State<ApduScreen> {
         ? ((response[response.length - 2] << 8) | response[response.length - 1])
         : null;
     final tlv = body == null || body.isEmpty ? null : parseTlv(body);
+    final supportsApdu = session.capabilities.isEmpty ||
+        session.capabilities.contains(Cmd.hf14a4ReaderApdu);
 
     return Scaffold(
       appBar: AppBar(title: Text(context.tr('apduLab'))),
@@ -67,17 +71,34 @@ class _ApduScreenState extends State<ApduScreen> {
                   Icon(Icons.info_outline, color: scheme.onTertiaryContainer),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      context.tr('apduScope'),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onTertiaryContainer,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          context.tr('apduScope'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onTertiaryContainer,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          context.tr('apduContactlessHint'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: scheme.onTertiaryContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
           ),
+          if (!supportsApdu) ...[
+            const SizedBox(height: 10),
+            _WarningBanner(message: context.tr('apduFirmwareHint')),
+          ],
           if (!session.readerMode) ...[
             const SizedBox(height: 10),
             _ReaderBanner(
@@ -127,7 +148,7 @@ class _ApduScreenState extends State<ApduScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _busy || !session.isConnected || !session.readerMode ? null : _send,
+                      onPressed: _busy || !session.isConnected ? null : _send,
                       icon: _busy
                           ? const SizedBox(
                               width: 16,
@@ -142,6 +163,10 @@ class _ApduScreenState extends State<ApduScreen> {
               ),
             ),
           ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            _WarningBanner(message: _error!),
+          ],
           if (response != null) ...[
             const SizedBox(height: 14),
             Card(
@@ -304,7 +329,28 @@ class _ApduScreenState extends State<ApduScreen> {
       return;
     }
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    if (!session.readerMode) {
+      final switched = await session.guard<bool>(
+        context.tr('modeReader'),
+        () async {
+          await session.setReaderMode(true);
+          return true;
+        },
+      );
+      if (!mounted || switched != true) {
+        if (mounted) {
+          setState(() {
+            _busy = false;
+            _error = session.lastError;
+          });
+        }
+        return;
+      }
+    }
     final response = await session.guard(
       context.tr('apduSend'),
       () => session.client!.hf14a4ReaderApdu(apdu),
@@ -313,9 +359,12 @@ class _ApduScreenState extends State<ApduScreen> {
     setState(() {
       _busy = false;
       if (response != null) {
+        _error = null;
         _response = response;
         _history.add(_ApduExchange(request: apdu, response: response));
         if (_history.length > 20) _history.removeAt(0);
+      } else {
+        _error = session.lastError ?? context.tr('error');
       }
     });
   }
@@ -325,6 +374,36 @@ class _ApduExchange {
   _ApduExchange({required this.request, required this.response});
   final Uint8List request;
   final Uint8List response;
+}
+
+class _WarningBanner extends StatelessWidget {
+  const _WarningBanner({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.errorContainer,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber, color: scheme.onErrorContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: scheme.onErrorContainer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ReaderBanner extends StatelessWidget {
