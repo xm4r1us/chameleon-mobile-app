@@ -8,7 +8,10 @@ import 'dart:typed_data';
 /// 8-bit sum of the covered bytes.
 class ChameleonFrame {
   static const int sof = 0x11;
-  static const int maxDataLength = 512;
+
+  /// Matches the firmware's `NETDATA_MAX_DATA_LENGTH`; the one-shot EMV scan
+  /// returns a full APDU transcript that routinely exceeds 512 bytes.
+  static const int maxDataLength = 4096;
 
   final int command;
   final int status;

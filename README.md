@@ -35,8 +35,9 @@ emülatör kontrolü ve MIFARE Classic anahtar kurtarma içerir.
 - **Blok araçları** — tek blok okuma/yazma ve value block inc/dec/restore.
 - **Ham konsol** — komut kimliği + hex veri gönderimi, durum ve yanıt inceleme.
 - **APDU konsolu** — JavaCard / ISO14443-4 geliştirmesi için ISO7816-4 APDU gönderimi,
-  SW1/SW2 çözümlemesi ve genel BER-TLV görüntüleyici. Kart numarası okuyucu
-  PPSE → PSE → GPO → READ RECORD adımlarını izleyip yalnızca PAN'ı gösterir.
+  SW1/SW2 çözümlemesi ve genel BER-TLV görüntüleyici. Kart numarası okuyucu,
+  yazılım 6005'i bildiriyorsa PPSE → GPO → READ RECORD zincirini Chameleon içinde
+  tek çağrıda çalıştırır ve yalnızca PAN'ı gösterir.
 - **Cihaz ayarları** — animasyon, A/B kısa/uzun basış işlevleri, BLE eşleştirme
   anahtarı, eşleşmeleri temizleme, uyku süresi, uzun basış eşiği, reset,
   fabrika sıfırlama ve bootloader'a girme.

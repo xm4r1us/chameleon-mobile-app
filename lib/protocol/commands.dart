@@ -156,6 +156,7 @@ class Cmd {
   static const int hf14a4SetAntiColl = 6002;
   static const int hf14a4StaticResponse = 6003;
   static const int hf14a4ReaderApdu = 6004;
+  static const int hf14a4EmvScan = 6005;
 }
 
 /// Firmware status codes.

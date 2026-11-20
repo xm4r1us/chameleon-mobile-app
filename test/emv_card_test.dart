@@ -12,6 +12,26 @@ String _ok(String hex) => '${hex}9000';
 String _selectAid(String aid) =>
     '00A4040007${aid.toUpperCase()}00';
 
+/// Packs a transcript exactly like firmware command 6005 does.
+Uint8List _scanPayload(List<List<String>> pairs) {
+  final b = BytesBuilder();
+  b.add([0x02, 0x11, 0x22]); // UID
+  b.add([0x04, 0x00]); // ATQA
+  b.addByte(0x00); // SAK
+  b.addByte(0x00); // ATS length
+  b.addByte(pairs.length);
+  for (final pair in pairs) {
+    final command = hexToBytes(pair[0]);
+    final response = hexToBytes(pair[1]);
+    b.addByte(command.length);
+    b.add(command);
+    b.addByte(response.length & 0xFF);
+    b.addByte((response.length >> 8) & 0xFF);
+    b.add(response);
+  }
+  return b.takeBytes();
+}
+
 class _Card {
   _Card(this.handler);
 
@@ -159,6 +179,36 @@ void main() {
       final result = await EmvCardReader(send: card.send).readPan();
 
       expect(result.pan, '4111111111111111111');
+    });
+
+    test('reads the PAN from a firmware EMV transcript', () async {
+      final payload = _scanPayload([
+        [
+          _ppseSelect,
+          _ok('6F23840E325041592E5359532E4444463031A511BF0C0E610C'
+              '4F07A0000000031010870101'),
+        ],
+        [
+          _selectAid('A0000000031010'),
+          _ok('6F198407A0000000031010A50E9F380B9F66049F02069F37049505'),
+        ],
+        ['80A8000002830000', _ok('770A82021980940408010100')],
+        ['00B2010C00', _ok('70145A0841111111111111115F24032512315F200100')],
+      ]);
+
+      final result = await EmvCardReader(scan: () async => parseEmvScan(payload)).readPan();
+
+      expect(result.pan, '4111111111111111');
+      expect(result.aid, 'A0000000031010');
+      expect(result.sourceTag, '5A');
+      expect(result.candidates, ['A0000000031010']);
+    });
+
+    test('rejects a truncated firmware transcript', () {
+      expect(
+        () => parseEmvScan(hexToBytes('02112204000000')),
+        throwsA(isA<EmvCardException>()),
+      );
     });
 
     test('throws when no application can be started', () async {

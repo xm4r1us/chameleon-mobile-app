@@ -1039,6 +1039,35 @@ class ChameleonClient {
     return Uint8List.fromList(frame.data);
   }
 
+  /// Runs the firmware's one-shot EMV scan: field cycle, PPSE, SELECT AID,
+  /// GPO and READ RECORD all execute inside the Chameleon. This avoids
+  /// re-activating the RC522 between host APDUs, which overruns its 64-byte
+  /// receive path on real card records.
+  Future<Uint8List> hf14a4EmvScan() async {
+    final frame = await send(
+      Cmd.hf14a4EmvScan,
+      timeout: const Duration(seconds: 30),
+      allowedStatus: {
+        Status.success,
+        Status.hfTagOk,
+        Status.hfTagNo,
+        Status.hfErrStat,
+        Status.hfErrCrc,
+        Status.hfCollision,
+        Status.hfErrParity,
+        Status.hfErrAts,
+        Status.parErr,
+      },
+    );
+    if (frame.status == Status.hfTagNo) {
+      throw ChameleonException('No ISO14443-4 card in field', status: frame.status);
+    }
+    if (frame.status != Status.success && frame.status != Status.hfTagOk) {
+      throw ChameleonException(Status.describe(frame.status), status: frame.status);
+    }
+    return Uint8List.fromList(frame.data);
+  }
+
   // ---------------------------------------------------------------------------
   // Device settings
   // ---------------------------------------------------------------------------

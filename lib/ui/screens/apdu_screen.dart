@@ -104,6 +104,11 @@ class _ApduScreenState extends State<ApduScreen> {
             const SizedBox(height: 10),
             _WarningBanner(message: context.tr('apduFirmwareHint')),
           ],
+          if (session.capabilities.isNotEmpty &&
+              !session.capabilities.contains(Cmd.hf14a4EmvScan)) ...[
+            const SizedBox(height: 10),
+            _WarningBanner(message: context.tr('apduScanFirmwareHint')),
+          ],
           if (!session.readerMode) ...[
             const SizedBox(height: 10),
             _ReaderBanner(
@@ -426,12 +431,18 @@ class _ApduScreenState extends State<ApduScreen> {
     }
 
     var notFound = false;
-    final reader = EmvCardReader(
-      send: client.hf14a4ReaderApdu,
-      onProgress: (step) {
-        if (mounted) setState(() => _cardStep = step);
-      },
-    );
+    final onProgress = (String step) {
+      if (mounted) setState(() => _cardStep = step);
+    };
+    final reader = session.capabilities.contains(Cmd.hf14a4EmvScan)
+        ? EmvCardReader(
+            scan: () async => parseEmvScan(await client.hf14a4EmvScan()),
+            onProgress: onProgress,
+          )
+        : EmvCardReader(
+            send: client.hf14a4ReaderApdu,
+            onProgress: onProgress,
+          );
     final result = await session.guard<EmvPanResult?>(
       context.tr('apduReadCard'),
       () async {
