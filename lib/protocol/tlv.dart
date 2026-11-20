@@ -31,6 +31,16 @@ class TlvParseResult {
   final String? error;
 }
 
+/// Walks [nodes] depth-first and yields every node whose tag matches
+/// [tagHex] (case-insensitive, e.g. `'9F38'`).
+Iterable<TlvNode> findTlvTag(Iterable<TlvNode> nodes, String tagHex) sync* {
+  final wanted = tagHex.toUpperCase();
+  for (final node in nodes) {
+    if (node.tagHex == wanted) yield node;
+    yield* findTlvTag(node.children, wanted);
+  }
+}
+
 /// Parses a sequence of BER-TLV objects. Constructed tags are decoded
 /// recursively; a malformed nested value is kept as a primitive leaf.
 TlvParseResult parseTlv(Uint8List data, {int maxDepth = 12}) {

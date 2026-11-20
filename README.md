@@ -35,8 +35,8 @@ emülatör kontrolü ve MIFARE Classic anahtar kurtarma içerir.
 - **Blok araçları** — tek blok okuma/yazma ve value block inc/dec/restore.
 - **Ham konsol** — komut kimliği + hex veri gönderimi, durum ve yanıt inceleme.
 - **APDU konsolu** — JavaCard / ISO14443-4 geliştirmesi için ISO7816-4 APDU gönderimi,
-  SW1/SW2 çözümlemesi ve genel BER-TLV görüntüleyici. Otomatik EMV PAN/expiry
-  ayıklama yapmaz.
+  SW1/SW2 çözümlemesi ve genel BER-TLV görüntüleyici. Kart numarası okuyucu
+  PPSE → PSE → GPO → READ RECORD adımlarını izleyip yalnızca PAN'ı gösterir.
 - **Cihaz ayarları** — animasyon, A/B kısa/uzun basış işlevleri, BLE eşleştirme
   anahtarı, eşleşmeleri temizleme, uyku süresi, uzun basış eşiği, reset,
   fabrika sıfırlama ve bootloader'a girme.
@@ -72,9 +72,9 @@ Bu sürüm bilinçli olarak şunları içermez:
   MFKey32v2 vardır; hardnested için masaüstü CLI kullanın.
 - **USB-OTG** taşıması. Telefon tarafı BLE üzerinden çalışır.
 - **DFU firmware güncelleme** akışı (bootloader'a girme komutu vardır).
-- SEOS ve otomatik EMV PAN/expiry araçları, HF/LF sniffing, EM4x05 ve T55xx raw
-  komutları. APDU konsolu ham ISO7816-4 komutları gönderir; ödeme kartı verisi
-  ayıklamaz.
+- SEOS, EMV son kullanma tarihi çıkarımı, HF/LF sniffing, EM4x05 ve T55xx raw
+  komutları. APDU konsolu ham ISO7816-4 komutları gönderir; kart numarası okuyucu
+  yalnızca PAN'ı gösterir, başka ödeme verisi ayıklamaz.
 - IDTECK okuma (yazma/emülasyon vardır; okuma firmware'de özel LF örnekleme
   gerektirir).
 

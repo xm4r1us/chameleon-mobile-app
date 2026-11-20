@@ -27,6 +27,13 @@ void main() {
       expect(long.nodes.single.value, [0x12, 0x34, 0x56, 0x78, 0x90]);
     });
 
+    test('finds a tag inside nested templates', () {
+      final result = parseTlv(hexToBytes('6F118407A0000000031010A5069F38039F6604'));
+      final matches = findTlvTag(result.nodes, '9f38').toList();
+      expect(matches, hasLength(1));
+      expect(matches.single.value, [0x9F, 0x66, 0x04]);
+    });
+
     test('reports truncated data instead of throwing', () {
       final result = parseTlv(hexToBytes('6F098407A0'));
       expect(result.error, isNotNull);

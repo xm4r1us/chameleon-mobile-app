@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../l10n/strings.dart';
 import '../../protocol/byte_utils.dart';
 import '../../protocol/commands.dart';
+import '../../protocol/emv_card.dart';
 import '../../protocol/tlv.dart';
 import '../../services/device_session.dart';
 import '../../theme.dart';
@@ -25,6 +26,10 @@ class _ApduScreenState extends State<ApduScreen> {
   Uint8List? _response;
   String? _error;
   bool _busy = false;
+  EmvPanResult? _cardResult;
+  String? _cardError;
+  String? _cardStep;
+  bool _cardBusy = false;
 
   static const _presets = <String, String>{
     'Select MF': '00 A4 00 00 02 3F 00',
@@ -117,6 +122,77 @@ class _ApduScreenState extends State<ApduScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    children: [
+                      Icon(Icons.credit_card, color: scheme.primary, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          context.tr('apduReadCard'),
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    context.tr('apduReadCardDesc'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonalIcon(
+                      onPressed:
+                          _cardBusy || _busy || !session.isConnected ? null : _readCard,
+                      icon: _cardBusy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.nfc),
+                      label: Text(context.tr('apduReadCard')),
+                    ),
+                  ),
+                  if (_cardBusy) ...[
+                    const SizedBox(height: 10),
+                    const LinearProgressIndicator(),
+                    const SizedBox(height: 6),
+                    Text(
+                      _cardStep == null
+                          ? context.tr('apduReadingCard')
+                          : '${context.tr('apduReadingCard')} · $_cardStep',
+                      style: AppTheme.mono.copyWith(fontSize: 11.5),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          if (_cardError != null) ...[
+            const SizedBox(height: 10),
+            _WarningBanner(message: _cardError!),
+          ],
+          if (_cardResult != null) ...[
+            const SizedBox(height: 10),
+            _CardResultCard(
+              result: _cardResult!,
+              onCopy: () async {
+                await Clipboard.setData(ClipboardData(text: _cardResult!.pan));
+                if (mounted) showSnack(context, context.tr('copied'));
+              },
+            ),
+          ],
+          const SizedBox(height: 14),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   TextField(
                     controller: _apdu,
                     minLines: 2,
@@ -148,7 +224,7 @@ class _ApduScreenState extends State<ApduScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.icon(
-                      onPressed: _busy || !session.isConnected ? null : _send,
+                      onPressed: _busy || _cardBusy || !session.isConnected ? null : _send,
                       icon: _busy
                           ? const SizedBox(
                               width: 16,
@@ -315,6 +391,72 @@ class _ApduScreenState extends State<ApduScreen> {
   bool _printable(Uint8List value) =>
       value.isNotEmpty && value.every((b) => b >= 0x20 && b <= 0x7e);
 
+  Future<bool> _ensureReaderMode(DeviceSession session) async {
+    if (session.readerMode) return true;
+    final switched = await session.guard<bool>(
+      context.tr('modeReader'),
+      () async {
+        await session.setReaderMode(true);
+        return true;
+      },
+    );
+    return switched == true;
+  }
+
+  Future<void> _readCard() async {
+    final session = context.read<DeviceSession>();
+    final client = session.client;
+    if (client == null) return;
+
+    setState(() {
+      _cardBusy = true;
+      _cardError = null;
+      _cardResult = null;
+      _cardStep = null;
+    });
+
+    if (!await _ensureReaderMode(session)) {
+      if (mounted) {
+        setState(() {
+          _cardBusy = false;
+          _cardError = session.lastError ?? context.tr('error');
+        });
+      }
+      return;
+    }
+
+    var notFound = false;
+    final reader = EmvCardReader(
+      send: client.hf14a4ReaderApdu,
+      onProgress: (step) {
+        if (mounted) setState(() => _cardStep = step);
+      },
+    );
+    final result = await session.guard<EmvPanResult?>(
+      context.tr('apduReadCard'),
+      () async {
+        try {
+          return await reader.readPan();
+        } on EmvCardException {
+          notFound = true;
+          return null;
+        }
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _cardBusy = false;
+      _cardStep = null;
+      if (result != null) {
+        _cardResult = result;
+      } else if (notFound) {
+        _cardError = context.tr('apduPanNotFound');
+      } else {
+        _cardError = session.lastError ?? context.tr('error');
+      }
+    });
+  }
+
   Future<void> _send() async {
     final session = context.read<DeviceSession>();
     Uint8List apdu;
@@ -333,23 +475,14 @@ class _ApduScreenState extends State<ApduScreen> {
       _busy = true;
       _error = null;
     });
-    if (!session.readerMode) {
-      final switched = await session.guard<bool>(
-        context.tr('modeReader'),
-        () async {
-          await session.setReaderMode(true);
-          return true;
-        },
-      );
-      if (!mounted || switched != true) {
-        if (mounted) {
-          setState(() {
-            _busy = false;
-            _error = session.lastError;
-          });
-        }
-        return;
+    if (!await _ensureReaderMode(session)) {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _error = session.lastError;
+        });
       }
+      return;
     }
     final response = await session.guard(
       context.tr('apduSend'),
@@ -434,6 +567,67 @@ class _ReaderBanner extends StatelessWidget {
             child: Text(context.tr('switchMode')),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CardResultCard extends StatelessWidget {
+  const _CardResultCard({required this.result, required this.onCopy});
+
+  final EmvPanResult result;
+  final VoidCallback onCopy;
+
+  static String _panGroups(String pan) {
+    final groups = <String>[];
+    for (var i = 0; i < pan.length; i += 4) {
+      groups.add(pan.substring(i, i + 4 > pan.length ? pan.length : i + 4));
+    }
+    return groups.join(' ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Card(
+      color: scheme.primaryContainer.withValues(alpha: 0.35),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(context.tr('apduPan'), style: theme.textTheme.titleMedium),
+                ),
+                IconButton(
+                  tooltip: context.tr('copy'),
+                  onPressed: onCopy,
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              _panGroups(result.pan),
+              style: AppTheme.mono.copyWith(
+                fontSize: 17,
+                letterSpacing: 1.2,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            InfoRow(label: context.tr('apduPanAid'), value: result.aid, mono: true),
+            InfoRow(label: context.tr('apduPanSource'), value: 'TAG ${result.sourceTag}', mono: true),
+            InfoRow(
+              label: context.tr('apduPanCandidates'),
+              value: '${result.candidates.length}',
+              mono: true,
+            ),
+          ],
+        ),
       ),
     );
   }
