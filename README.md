@@ -117,6 +117,21 @@ flutter run -d <android-device>
 İlk açılışta BLE izinleri istenir. Uygulama yalnızca gerçek bir Chameleon Ultra
 ile çalışır; demo modu yoktur.
 
+## GitHub Actions
+
+`.github/workflows/build-apk.yml` her `main` push'unda ve pull request'te:
+
+1. Java 17, Android SDK 36, NDK 28.2 ve CMake 3.22 kurar.
+2. `flutter analyze` ve `flutter test` çalıştırır.
+3. `flutter build apk --release` ile APK üretir.
+4. APK'yı **Artifacts → chameleon-cli-apk-<sha>** olarak yükler.
+
+`v*` biçiminde bir tag push edilirse (`v1.0.0` gibi) aynı APK GitHub
+Release'e de eklenir. Release APK'sı şu an debug anahtarıyla imzalanır;
+mağaza dağıtımı için `android/app/build.gradle.kts` içinde kendi
+keystore/signing config'inizi tanımlayın.
+
+
 ## Doğrulama
 
 - `flutter test`: çerçeve kodlama/çözme, bozuk LRC yeniden senkronizasyonu,
